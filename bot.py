@@ -1,114 +1,69 @@
 import os
+import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+# إعدادات البوت
 TOKEN = os.environ.get("8696476223:AAEKSlLtQiyTpMapE9dkRepoEWHXERtqW2M")
+GEMINI_KEY = os.environ.get("AIzaSyCMXHL7IagagEa_NpfDKtjkHmmgZZ1s7w8")
 
-# قاعدة بيانات طبية شاملة
-MEDICAL_KNOWLEDGE = {
-    "قلب": """❤️ *القلب*
-
-📍 الموقع: وسط الصدر بين الرئتين
-🔧 الوظيفة: ضخ الدم للجسم
-🏗️ التركيب: 4 حجرات (أذين أيمن/أيسر، بطين أيمن/أيسر)
-💓 معدل النبض: 60-100 نبضة/دقيقة
-
-⚠️ أمراض شائعة: احتشاء عضلة القلب، فشل القلب، اضطراب النظم""",
-
-    "دم": """🩸 *الدم*
-
-🧪 المكونات:
-• كريات حمراء (RBC): تنقل الأكسجين
-• كريات بيضاء (WBC): المناعة
-• صفائح دموية: التجلط
-• بلازما: السائل الناقل
-
-📊 الكمية: 5 لترات في الجسم البالغ
-🩺 فصيلة الدم: A, B, AB, O""",
-
-    "سكري": """🩺 *السكري*
-
-📌 التعريف: ارتفاع سكر الدم عن الطبيعي
-
-🔴 النوع الأول:
-• يبدأ في الطفولة/المراهقة
-• نقص كامل في الأنسولين
-• العلاج: حقن الأنسولين
-
-🔵 النوع الثاني:
-• يبدأ في البلوغ/الشيخوخة
-• مقاومة الأنسولين
-• العلاج: حبوب + نظام غذائي
-
-⚠️ الأعراض: عطش شديد، تبول متكرر، فقدان وزن، تعب""",
-
-    "ضغط": """🩺 *ضغط الدم*
-
-📊 التصنيف:
-• طبيعي: أقل من 120/80
-• مرتفع: 140/90 أو أكثر
-• منخفض: أقل من 90/60
-
-🔴 الأسباب: التوتر، الملح، السمنة، الوراثة
-
-💊 العلاج: رياضة، نظام غذائي قليل الملح، أدوية""",
-
-    "رئة": """🫁 *الرئة*
-
-📍 الموقع: في الصدر على جانبي القلب
-🔧 الوظيفة: تبادل الغازات (O2 داخل، CO2 خارج)
-🏗️ التركيب: القصبة الهوائية → الشعب الهوائية → الحويصلات الهوائية
-
-🫁 الحويصلات: 300 مليون حويصلة!
-💨 القدرة: تستقبل 500 مليون متر مكعب من الهواء في العمر""",
-}
+# إعداد Gemini
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome = """🩺 *مساعد الطبيب الذكي*
+    welcome = """🩺 *مساعد الطبيب الذكي - النسخة المتقدمة*
 
-مرحباً! أنا هنا لأساعدك في دراستك الطبية.
+مرحباً! أنا هنا لأساعدك في أي موضوع طبي.
 
-📚 *ما أستطيع الإجابة عنه:*
-• ❤️ القلب
-• 🩸 الدم
-• 🩺 السكري
-• 🩺 ضغط الدم
-• 🫁 الرئة
+🧠 *أستطيع الإجابة عن:*
+• أي سؤال في التشريح
+• الفيسيولوجيا والأمراض
+• الأدوية والعلاجات
+• الحالات السريرية
+• التحضير للامتحانات
 
-💡 *اكتب أي كلمة وسأشرحها لك!*"""
+💡 *فقط اكتب سؤالك وسأجيبك!*"""
     
     await update.message.reply_text(welcome, parse_mode='Markdown')
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
+    user_question = update.message.text
     
-    # البحث في القاعدة
-    found = False
-    for keyword, response in MEDICAL_KNOWLEDGE.items():
-        if keyword in text:
-            await update.message.reply_text(response, parse_mode='Markdown')
-            found = True
-            break
+    # إظهار "يكتب..."
+    await update.message.chat.send_action(action="typing")
     
-    # لو ما لقينا الرد
-    if not found:
+    try:
+        # إرسال السؤال للذكاء الاصطناعي
+        prompt = f"""أنت مساعد طبي متخصص لطلاب الطب. 
+        قدم إجابة علمية دقيقة ومبسطة.
+        استخدم الرموز التوضيحية مثل: 📍 🔧 ⚠️ 💊
+        قسم الإجابة إلى نقاط واضحة.
+        
+        سؤال الطالب: {user_question}"""
+        
+        response = model.generate_content(prompt)
+        answer = response.text
+        
+        # إرسال الإجابة
+        if len(answer) > 4000:
+            # تقسيم الرد الطويل
+            parts = [answer[i:i+4000] for i in range(0, len(answer), 4000)]
+            for part in parts:
+                await update.message.reply_text(part)
+        else:
+            await update.message.reply_text(answer)
+            
+    except Exception as e:
         await update.message.reply_text(
-            f"""📚 سألت عن: "{update.message.text}"
-
-🔍 حالياً أستطيع الإجابة عن:
-• ❤️ القلب
-• 🩸 الدم
-• 🩺 السكري
-• 🩺 ضغط الدم
-• 🫁 الرئة
-
-💡 *جرب أن تسأل:* "ما هو القلب؟" أو "اشرح لي الدم"""",
-            parse_mode='Markdown'
+            "⚠️ عذراً، حدث خطأ في الاتصال بالذكاء الاصطناعي.\n"
+            "جرب مرة أخرى أو تأكد من المفتاح."
         )
 
+# تشغيل البوت
 app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-print("✅ البوت يعمل!")
+print("🤖 البوت الذكي يعمل!")
 app.run_polling()
