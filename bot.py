@@ -1,69 +1,72 @@
 import os
-import google.generativeai as genai
+from google import genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# إعدادات البوت
+# التوكن والمفتاح
 TOKEN = os.environ.get("8696476223:AAEKSlLtQiyTpMapE9dkRepoEWHXERtqW2M")
 GEMINI_KEY = os.environ.get("AIzaSyCMXHL7IagagEa_NpfDKtjkHmmgZZ1s7w8")
 
+# طباعة للتأكد
+print(f"TOKEN موجود: {bool(TOKEN)}")
+print(f"GEMINI_KEY موجود: {bool(GEMINI_KEY)}")
+
+if not TOKEN:
+    print("❌ خطأ: TOKEN غير موجود!")
+    exit(1)
+
 # إعداد Gemini
-genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+try:
+    client = genai.Client(api_key=GEMINI_KEY)
+    print("✅ Gemini متصل")
+except Exception as e:
+    print(f"⚠️ Gemini غير متصل: {e}")
+    client = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome = """🩺 *مساعد الطبيب الذكي - النسخة المتقدمة*
+    welcome = """🩺 *مساعد الطبيب الذكي*
 
 مرحباً! أنا هنا لأساعدك في أي موضوع طبي.
 
-🧠 *أستطيع الإجابة عن:*
-• أي سؤال في التشريح
-• الفيسيولوجيا والأمراض
-• الأدوية والعلاجات
+🧠 *اسألني عن:*
+• التشريح والفيسيولوجيا
+• الأمراض والعلاجات
 • الحالات السريرية
 • التحضير للامتحانات
 
-💡 *فقط اكتب سؤالك وسأجيبك!*"""
+💡 *اكتب سؤالك وسأجيبك!*"""
     
     await update.message.reply_text(welcome, parse_mode='Markdown')
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_question = update.message.text
-    
-    # إظهار "يكتب..."
     await update.message.chat.send_action(action="typing")
     
-    try:
-        # إرسال السؤال للذكاء الاصطناعي
-        prompt = f"""أنت مساعد طبي متخصص لطلاب الطب. 
-        قدم إجابة علمية دقيقة ومبسطة.
-        استخدم الرموز التوضيحية مثل: 📍 🔧 ⚠️ 💊
-        قسم الإجابة إلى نقاط واضحة.
-        
-        سؤال الطالب: {user_question}"""
-        
-        response = model.generate_content(prompt)
-        answer = response.text
-        
-        # إرسال الإجابة
-        if len(answer) > 4000:
-            # تقسيم الرد الطويل
-            parts = [answer[i:i+4000] for i in range(0, len(answer), 4000)]
-            for part in parts:
-                await update.message.reply_text(part)
-        else:
-            await update.message.reply_text(answer)
-            
-    except Exception as e:
-        await update.message.reply_text(
-            "⚠️ عذراً، حدث خطأ في الاتصال بالذكاء الاصطناعي.\n"
-            "جرب مرة أخرى أو تأكد من المفتاح."
-        )
+    # إذا Gemini متصل
+    if client:
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=f"""أنت مساعد طبي متخصص. أجب بشكل علمي دقيق ومبسط.
+                استخدم رموز: 📍 🔧 ⚠️ 💊
+                
+                السؤال: {user_question}"""
+            )
+            await update.message.reply_text(response.text)
+            return
+        except Exception as e:
+            print(f"خطأ Gemini: {e}")
+    
+    # رد احتياطي
+    await update.message.reply_text(
+        f"📚 سألت عن: {user_question}\n\n"
+        f"⚠️ الذكاء الاصطناعي غير متصل حالياً.\n"
+        f"جاري إصلاح المشكلة..."
+    )
 
-# تشغيل البوت
 app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-print("🤖 البوت الذكي يعمل!")
+print("🚀 البوت يعمل!")
 app.run_polling()
