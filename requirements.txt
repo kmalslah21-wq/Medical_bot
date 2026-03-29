@@ -1,1 +1,50 @@
 python-telegram-bot
+google-generativeai
+import os
+import google.generativeai as genai
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+TOKEN = os.environ.get("8696476223:AAEKSlLtQiyTpMapE9dkRepoEWHXERtqW2M")
+GEMINI_KEY = os.environ.get("AIzaSyCMXHL7IagagEa_NpfDKtjkHmmgZZ1s7w8")  # المفتاح الجديد
+
+# إعداد Gemini
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel('gemini-pro')
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🩺 مرحباً! أنا مساعدك الطبي الذكي.\n"
+        "اسألني أي سؤال طبي وسأجيبك!"
+    )
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_question = update.message.text
+    
+    # إظهار "يكتب..."
+    await update.message.chat.send_action(action="typing")
+    
+    try:
+        # إرسال السؤال لـ Gemini
+        prompt = f"""أنت مساعد طبي متخصص لطلاب الطب. 
+        أجب بشكل علمي دقيق ومبسط.
+        استخدم الرموز التوضيحية.
+        
+        السؤال: {user_question}"""
+        
+        response = model.generate_content(prompt)
+        answer = response.text
+        
+        await update.message.reply_text(answer)
+        
+    except Exception as e:
+        await update.message.reply_text(
+            "⚠️ عذراً، حدث خطأ. جرب مرة أخرى!"
+        )
+
+app = Application.builder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+print("🤖 البوت الذكي يعمل!")
+app.run_polling()
